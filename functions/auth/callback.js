@@ -9,6 +9,12 @@ function sendJson(res, status, obj) {
   res.end(JSON.stringify(obj));
 }
 
+function formEncode(obj) {
+  return new URLSearchParams(
+    Object.entries(obj).filter(([, v]) => v !== undefined && v !== null)
+  ).toString();
+}
+
 export default async function handler(req, res) {
   if (req.method !== "GET") return sendJson(res, 405, { error: "Method not allowed" });
 
@@ -20,14 +26,12 @@ export default async function handler(req, res) {
   const returnedState = url.searchParams.get("state");
   const installationUid = url.searchParams.get("installation_uid");
   const region = url.searchParams.get("region"); // optional from CS
-  const appFromQuery = url.searchParams.get("app"); // if you ever pass it
+  const appFromQuery = url.searchParams.get("app"); // optional
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // A) Developer Hub "Install" flow:
-  // Contentstack calls redirect_uri with ?code=...&installation_uid=... (no state/cookie)
-  // We must accept, exchange code → tokens, and return 200 so install succeeds.
-  // Uses the first APP_LABELS entry as the app label (or appFromQuery if you pass one).
-  // ─────────────────────────────────────────────────────────────────────────────
+  // ──────────────────────────────────────────────────────────────
+  // A) Developer Hub "Install" flow (no state/cookie, has installation_uid)
+  // Exchange code → app token via {BASE_URL}/apps-api/token (form-encoded)
+  // ──────────────────────────────────────────────────────────────
   if (installationUid && code && !returnedState) {
     const label = appFromQuery || defaultInstallLabel();
     if (!label) return sendJson(res, 500, { error: "No default app label configured (APP_LABELS is empty)" });
@@ -36,38 +40,39 @@ export default async function handler(req, res) {
     if (!cfgRes.ok) return sendJson(res, 500, { error: cfgRes.error });
     const { cfg } = cfgRes;
 
-    const tokenUrl = `https://${cfg.CONTENTSTACK_REGION}-app.contentstack.com/apps-api/apps/${cfg.CONTENTSTACK_APP_UID}/tokens`;
-    const tokenResp = await fetch(tokenUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        grant_type: "authorization_code",
-        code,
-        redirect_uri: cfg.OAUTH_REDIRECT_URI,
-        client_id: cfg.OAUTH_CLIENT_ID,
-        client_secret: cfg.OAUTH_CLIENT_SECRET
-        // no PKCE verifier for install handshake
-      })
+    const tokenUrl = `https://${cfg.CONTENTSTACK_REGION}-app.contentstack.com/apps-api/token`;
+    const body = formEncode({
+      grant_type: "authorization_code",
+      client_id: cfg.OAUTH_CLIENT_ID,
+      client_secret: cfg.OAUTH_CLIENT_SECRET,
+      redirect_uri: cfg.OAUTH_REDIRECT_URI,
+      code
+      // no PKCE for install handshake
     });
 
+    const tokenResp = await fetch(tokenUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body
+    });
     const tokenJson = await tokenResp.json();
     if (!tokenResp.ok) {
       return sendJson(res, tokenResp.status, { error: tokenJson.error_description || tokenJson.error || tokenJson });
     }
 
-    // For install we don't need to set a user session cookie; just return OK.
-    // (If you want to persist app-level tokens server-side, do it here.)
+    // We don't set a user session cookie for install. Returning 200 lets install complete.
     return sendJson(res, 200, {
       ok: true,
       installation_uid: installationUid,
       region,
-      app: label
+      app: label,
+      authorization_type: tokenJson.authorization_type || "app"
     });
   }
 
-  // ─────────────────────────────────────────────────────────────────────────────
+  // ──────────────────────────────────────────────────────────────
   // B) Regular user OAuth flow (PKCE + state, requires pre_auth cookie)
-  // ─────────────────────────────────────────────────────────────────────────────
+  // ──────────────────────────────────────────────────────────────
   if (!code || !returnedState) return sendJson(res, 400, { error: "Missing code/state" });
 
   const cookies = parseCookie(req.headers.cookie || "");
@@ -80,20 +85,21 @@ export default async function handler(req, res) {
   if (!cfgRes.ok) return sendJson(res, 500, { error: cfgRes.error });
   const { cfg } = cfgRes;
 
-  const tokenUrl = `https://${cfg.CONTENTSTACK_REGION}-app.contentstack.com/apps-api/apps/${cfg.CONTENTSTACK_APP_UID}/tokens`;
-  const tokenResp = await fetch(tokenUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      grant_type: "authorization_code",
-      code,
-      redirect_uri: cfg.OAUTH_REDIRECT_URI,
-      client_id: cfg.OAUTH_CLIENT_ID,
-      client_secret: cfg.OAUTH_CLIENT_SECRET,
-      code_verifier: preAuth.codeVerifier
-    })
+  const tokenUrl = `https://${cfg.CONTENTSTACK_REGION}-app.contentstack.com/apps-api/token`;
+  const body = formEncode({
+    grant_type: "authorization_code",
+    client_id: cfg.OAUTH_CLIENT_ID,
+    client_secret: cfg.OAUTH_CLIENT_SECRET,   // allowed even with PKCE; see note
+    redirect_uri: cfg.OAUTH_REDIRECT_URI,
+    code,
+    code_verifier: preAuth.codeVerifier       // PKCE parameter
   });
 
+  const tokenResp = await fetch(tokenUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body
+  });
   const tokenJson = await tokenResp.json();
   if (!tokenResp.ok) {
     return sendJson(res, tokenResp.status, { error: tokenJson.error_description || tokenJson.error || tokenJson });
@@ -106,6 +112,9 @@ export default async function handler(req, res) {
     refreshToken: tokenJson.refresh_token,
     tokenType: tokenJson.token_type || "Bearer",
     scope: tokenJson.scope || cfg.OAUTH_SCOPE || null,
+    organizationUid: tokenJson.organization_uid || undefined,
+    location: tokenJson.location || undefined,
+    authorizationType: tokenJson.authorization_type || "user",
     expiresAt: now + (tokenJson.expires_in || 3600),
     obtainedAt: now
   };
