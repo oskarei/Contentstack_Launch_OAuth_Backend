@@ -1,5 +1,5 @@
 // Strict multi-app config: requires label-prefixed envs only.
-// Example for label "interstack": INTERSTACK_CONTENTSTACK_APP_UID, etc.
+// Example label "interstack": INTERSTACK_CONTENTSTACK_APP_UID, etc.
 
 function parseLabels() {
   const raw = process.env.APP_LABELS || "";
@@ -19,6 +19,13 @@ export function resolveAppLabel(fromQuery) {
   if (fromQuery && labels.includes(fromQuery)) return fromQuery;
   if (labels.length === 1) return labels[0];
   return ""; // force explicit ?app= when multiple labels exist
+}
+
+// NEW: default label for installation callbacks (no ?app= / no cookie)
+// picks the first label in APP_LABELS
+export function defaultInstallLabel() {
+  const labels = parseLabels();
+  return labels[0] || "";
 }
 
 export function getAppConfig(label) {
