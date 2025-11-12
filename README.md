@@ -52,11 +52,4 @@ APP_LABELS=interstack
 # shared
 ALLOWED_ORIGIN=http://localhost:8787,https://app.contentstack.com,https://eu-app.contentstack.com
 COOKIE_SECRET=t7JbI4cvn+xJQqsdzSxQWvlHpHbHsDls6Z0iEktT/YQ=
-
-# Interstack app
-INTERSTACK_CONTENTSTACK_REGION=eu
-INTERSTACK_CONTENTSTACK_APP_UID=bltInterstackUid
-INTERSTACK_OAUTH_CLIENT_ID=interstackClientId
-INTERSTACK_OAUTH_CLIENT_SECRET=interstackClientSecret
-INTERSTACK_OAUTH_REDIRECT_URI=http://localhost:8787/auth/callback
-INTERSTACK_OAUTH_SCOPE=cm.entry:read cm.entry:write cm.entry:publish cm.assets.management:read cm.assets.management:write cm.assets:download cm.entries.management:read cm.entries.management:write
+ALLOWED_ORIGIN=http://localhost:3000,https://app.contentstack.com,https://eu-app.contentstack.com
