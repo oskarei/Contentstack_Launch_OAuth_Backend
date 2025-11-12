@@ -1,29 +1,30 @@
-# Contentstack Launch OAuth Backend
+# Contentstack Launch OAuth Backend (Multi-App)
 
-A lightweight Node.js backend for handling secure OAuth authentication (Authorization Code + PKCE) with **Contentstack** apps or custom fields.
+A lightweight Node.js backend for secure OAuth authentication (Authorization Code + PKCE) with **Contentstack** apps or custom fields.
 
-Runs entirely as **serverless functions on Contentstack Launch**, keeping your `client_secret` and tokens safely on the backend.
+Runs as **serverless functions on Contentstack Launch**, now supporting multiple app configurations (e.g. `?app=interstack`) using label-prefixed environment variables.
 
 ---
 
 ## 🚀 Features
 
 - Full **OAuth 2.0 Authorization Code + PKCE** flow  
+- Supports **multiple apps** via `APP_LABELS` and query `?app=`  
 - Secure token exchange & storage (AES-256 encrypted HttpOnly cookies)  
 - `/auth/start`, `/auth/callback`, `/auth/token`, `/auth/logout` endpoints  
-- Automatic token refresh using `refresh_token`  
-- Multi-origin CORS support (comma-separated `ALLOWED_ORIGIN` list)  
-- Environment-variable configuration for Launch and local development  
+- Automatic token refresh with `refresh_token`  
+- Multi-origin CORS with comma-separated `ALLOWED_ORIGIN`  
+- Simple environment-based configuration for Launch + local dev  
 
 ---
 
 ## 🧩 How It Works
 
-1. `/auth/start` redirects the user to Contentstack’s OAuth authorization screen.  
-2. `/auth/callback` exchanges the returned `code` for tokens using your `client_secret`.  
-3. Tokens are encrypted and stored in an HttpOnly cookie.  
-4. `/auth/token` returns a fresh access token (auto-refresh if needed).  
-5. `/auth/logout` clears cookies and disconnects the session.
+1. `/auth/start?app=interstack` redirects to Contentstack’s OAuth screen.  
+2. `/auth/callback` exchanges the `code` for tokens using app-specific secrets.  
+3. Tokens are encrypted and stored as HttpOnly cookies.  
+4. `/auth/token` returns a valid access token (auto-refreshes).  
+5. `/auth/logout` clears cookies.
 
 ---
 
@@ -31,25 +32,31 @@ Runs entirely as **serverless functions on Contentstack Launch**, keeping your `
 
 | Variable | Description |
 |-----------|-------------|
-| `CONTENTSTACK_REGION` | Region prefix (`eu`, `us`, `az`, etc.) |
-| `CONTENTSTACK_APP_UID` | Your app UID from Developer Hub |
-| `OAUTH_CLIENT_ID` | App client ID |
-| `OAUTH_CLIENT_SECRET` | App client secret |
-| `OAUTH_REDIRECT_URI` | Must match `/auth/callback` route |
-| `OAUTH_SCOPE` | Space-separated OAuth scopes |
-| `COOKIE_SECRET` | Base64-encoded 32-byte key (`openssl rand -base64 32`) |
-| `ALLOWED_ORIGIN` | Comma-separated list of allowed origins |
+| `APP_LABELS` | Comma-separated app labels (e.g. `interstack,crm`) |
+| `<LABEL>_CONTENTSTACK_REGION` | Region prefix (`eu`, `us`, `az`, etc.) |
+| `<LABEL>_CONTENTSTACK_APP_UID` | App UID from Developer Hub |
+| `<LABEL>_OAUTH_CLIENT_ID` | OAuth client ID |
+| `<LABEL>_OAUTH_CLIENT_SECRET` | OAuth client secret |
+| `<LABEL>_OAUTH_REDIRECT_URI` | Must point to `/auth/callback` |
+| `<LABEL>_OAUTH_SCOPE` | Space-separated scopes |
+| `COOKIE_SECRET` | Base64 32-byte key (`openssl rand -base64 32`) |
+| `ALLOWED_ORIGIN` | Comma-separated trusted origins |
 
 ---
 
 ## 🧠 Example `.env.local`
 
 ```bash
-CONTENTSTACK_REGION=eu
-CONTENTSTACK_APP_UID=blt12345abcde
-OAUTH_CLIENT_ID=yourClientId
-OAUTH_CLIENT_SECRET=yourClientSecret
-OAUTH_REDIRECT_URI=http://localhost:8787/auth/callback
-OAUTH_SCOPE=user:read cm.entries.management:read cm.entry:write
+APP_LABELS=interstack
+
+# shared
+ALLOWED_ORIGIN=http://localhost:8787,https://app.contentstack.com,https://eu-app.contentstack.com
 COOKIE_SECRET=t7JbI4cvn+xJQqsdzSxQWvlHpHbHsDls6Z0iEktT/YQ=
-ALLOWED_ORIGIN=http://localhost:3000,https://app.contentstack.com,https://eu-app.contentstack.com
+
+# Interstack app
+INTERSTACK_CONTENTSTACK_REGION=eu
+INTERSTACK_CONTENTSTACK_APP_UID=bltInterstackUid
+INTERSTACK_OAUTH_CLIENT_ID=interstackClientId
+INTERSTACK_OAUTH_CLIENT_SECRET=interstackClientSecret
+INTERSTACK_OAUTH_REDIRECT_URI=http://localhost:8787/auth/callback
+INTERSTACK_OAUTH_SCOPE=cm.entry:read cm.entry:write cm.entry:publish cm.assets.management:read cm.assets.management:write cm.assets:download cm.entries.management:read cm.entries.management:write
