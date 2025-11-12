@@ -24,8 +24,13 @@ export default async function handler(req, res) {
   const state = crypto.randomUUID();
 
   const preAuth = JSON.stringify({ state, codeVerifier, app, t: Date.now() });
+  // pre_auth cookie
   res.setHeader("Set-Cookie", serializeCookie("pre_auth", preAuth, {
-    httpOnly:true, secure:true, sameSite:"lax", path:"/", maxAge:300
+    httpOnly: true,
+    secure: true,
+    sameSite: "none",   // ⬅️ was "lax"
+    path: "/",
+    maxAge: 5 * 60
   }));
 
   const authUrl = new URL(`https://${cfg.CONTENTSTACK_REGION}-app.contentstack.com/apps/${cfg.CONTENTSTACK_APP_UID}/authorize`);

@@ -126,11 +126,20 @@ export default async function handler(req, res) {
     .setExpirationTime("30d")
     .encrypt(secret);
 
+  // token cookie
   const tokenCookie = serializeCookie("oauth_token", jwe, {
-    httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 30 * 24 * 60 * 60
+    httpOnly: true,
+    secure: true,
+    sameSite: "none",   // ⬅️ was "lax"
+    path: "/",
+    maxAge: 30 * 24 * 60 * 60
   });
   const clearPre = serializeCookie("pre_auth", "", {
-    httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 0
+    httpOnly: true,
+    secure: true,
+    sameSite: "none",   // ⬅️ was "lax"
+    path: "/",
+    maxAge: 0
   });
 
   res.setHeader("Set-Cookie", [tokenCookie, clearPre]);

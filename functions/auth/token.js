@@ -95,8 +95,13 @@ export default async function handler(req, res) {
       .setExpirationTime("30d")
       .encrypt(secret);
 
+    // refreshed token cookie
     res.setHeader("Set-Cookie", serializeCookie("oauth_token", newJwe, {
-      httpOnly: true, secure: true, sameSite: "lax", path: "/", maxAge: 30 * 24 * 60 * 60
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",   // ⬅️ was "lax"
+      path: "/",
+      maxAge: 30 * 24 * 60 * 60
     }));
   }
 
